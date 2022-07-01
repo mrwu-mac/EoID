@@ -1,0 +1,31 @@
+python3 -m torch.distributed.launch \
+        --nproc_per_node=4 \
+        --use_env \
+        main.py \
+        --pretrained params/detr-r50-pre-2stage-q64.pth \
+        --output_dir output/logs_hvco_vit32_hard_0.1 \
+        --dataset_file hvco \
+        --hoi_path data \
+        --num_obj_classes 80 \
+        --num_verb_classes 123 \
+        --backbone resnet50 \
+        --num_queries 64 \
+        --dec_layers_hopd 3 \
+        --dec_layers_interaction 3 \
+        --epochs 90 \
+        --lr_drop 60 \
+        --use_nms_filter \
+        --batch_size 4 \
+        --uc_idx 0 \
+        --topk 3 \
+        --verb_loss_type focal_bce \
+        --clip_backbone ViT-B-32 \
+        --clip 8 \
+        --inter_score \
+        --topk_is \
+        --verb_loss_coef 1.6 \
+        --clip_loss_coef 700 \
+        --thres 0.5 \
+        --neg_0 \
+        --gtclip \
+        --vdetach \

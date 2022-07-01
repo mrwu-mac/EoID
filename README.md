@@ -1,4 +1,4 @@
-# CDN: A Pytorch Implementation
+# EoID: A Pytorch Implementation
 Code for our paper [End-to-End Zero-Shot HOI Detection via Vision and Language Knowledge Distillation](https://arxiv.org/abs/2204.03541).
 
 ## Installation
@@ -92,9 +92,16 @@ bash test.sh
 ## Results
 
 ### HICO-DET under UA setting
-||Full |Seen |Unseen |Download|
+| |Full |Seen |Unseen |Download|
 | :--- | :---: | :---: | :---: | :---: |
-|EoID (R50)| 29.22 | 30.46 | 23.04 | [model](https://drive.google.com/file/d/1UrTkE0BGpCDnvmmHp9mtV2WoVtjEmHkR/view?usp=sharing) |
+|EoID(R50)| 29.22 | 30.46 | 23.04 | [model](https://drive.google.com/file/d/1UrTkE0BGpCDnvmmHp9mtV2WoVtjEmHkR/view?usp=sharing) |
+
+### HICO-DET under UC setting
+| |UC_Type |Full | Seen |Unseen |Download|
+| :--- | :---: | :---: | :---: | :---: | :---: |
+|EoID(R50)|default |28.91$\pm$0.33 |30.39$\pm$0.40 |23.01$\pm$1.98| model |
+|EoID(R50)|rare_first |29.52 |31.39 |22.04| model |
+|EoID(R50)|non_rare_first |26.69 |26.66 |26.77| model|
 
 ## Acknowledge
 This repo is based on [CDN](https://github.com/YueLiao/CDN), [CLIP](https://github.com/openai/CLIP) and [ConsNet](https://github.com/yeliudev/ConsNet).

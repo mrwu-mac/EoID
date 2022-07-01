@@ -1,0 +1,8 @@
+cython
+pycocotools
+scipy
+opencv-python
+ftfy
+regex
+timm
+nncore==0.2.4
