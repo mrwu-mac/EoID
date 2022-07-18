@@ -30,7 +30,8 @@ def get_args_parser():
                         help='gradient clipping max norm')
 
     # zero-shot with CLIP
-    parser.add_argument('--model', default='eoid', type=str, choices=['cdn', 'eoid', 'eoid_acc', 'cons'])
+    parser.add_argument('--model', default='eoid', type=str,
+                        choices=['cdn', 'eoid', 'eoid_acc', 'cons', 'eoid_gen_acc'])
     parser.add_argument('--topk', default=3, type=int)
     parser.add_argument('--thres', default=0.5, type=float)
     parser.add_argument('--inter_score', action='store_true')
