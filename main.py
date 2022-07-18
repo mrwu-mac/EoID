@@ -40,7 +40,7 @@ def get_args_parser():
     parser.add_argument('--vdetach', action='store_true')
     parser.add_argument('--verb_loss_type', default='focal_bce', type=str, choices=['bce_bce', 'focal_bce', ])
     parser.add_argument('--clip_backbone', default='RN50', choices=['RN50', 'RN50x16', 'RN101', 'ViT-B-32', 'ViT-B-16'])
-    parser.add_argument('--uc_type', default='uc0', type=int,
+    parser.add_argument('--uc_type', default='uc0', type=str,
                         choices=['rare_first', 'non_rare_first', 'uc0', 'uc1', 'uc2', 'uc3', 'uc4'],
                         help='Select uc_type, uc0~4 denote default five uc types')
 
