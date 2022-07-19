@@ -191,7 +191,7 @@ class SetCriterionHOI(nn.Module):
         self.obj_reweight = args.obj_reweight
         self.verb_reweight = args.verb_reweight
         self.use_static_weights = args.use_static_weights
-        self.clipseen_reweight = args.clipseen_reweight
+        # self.clipseen_reweight = args.clipseen_reweight
 
         Maxsize = args.queue_size
 
@@ -205,12 +205,12 @@ class SetCriterionHOI(nn.Module):
             self.p_verb = args.p_verb
             self.verb_weights_init = self.cal_weights(self.verb_nums_init, p=self.p_verb)
 
-        if self.clipseen_reweight:
-            self.p_verb = args.p_verb
-            ua = [HOI_IDX_TO_ACT_IDX[idx] for idx in UA_HOI_IDX]
-            self.verb_nums_init = [self.verb_nums_init[i] if i not in ua else 1 for i in
-                                   range(len(self.verb_nums_init))]
-            self.clipseen_weights_init = self.cal_weights(self.verb_nums_init, p=self.p_verb)
+        # if self.clipseen_reweight:
+        #     self.p_verb = args.p_verb
+        #     ua = [HOI_IDX_TO_ACT_IDX[idx] for idx in UA_HOI_IDX]
+        #     self.verb_nums_init = [self.verb_nums_init[i] if i not in ua else 1 for i in
+        #                            range(len(self.verb_nums_init))]
+        #     self.clipseen_weights_init = self.cal_weights(self.verb_nums_init, p=self.p_verb)
 
     def cal_weights(self, label_nums, p=0.5):
         num_fgs = len(label_nums[:-1])

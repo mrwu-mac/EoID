@@ -1,21 +1,18 @@
 import argparse
-import time
 import datetime
-import random
-from pathlib import Path
 import json
+import os
+import random
+import time
+from pathlib import Path
 
 import numpy as np
 import torch
-from torch.nn import parameter
-from torch.utils.data import DataLoader, DistributedSampler
-
-import datasets
 import util.misc as utils
 from datasets import build_dataset
 from engine import train_one_epoch, evaluate_hoi
 from models import build_model
-import os
+from torch.utils.data import DataLoader, DistributedSampler
 
 
 def get_args_parser():
@@ -271,7 +268,7 @@ def main(args):
             sampler_train.set_epoch(epoch)
         train_stats = train_one_epoch(
             model, criterion, data_loader_train, optimizer, device, epoch,
-            args.clip_max_norm, args.learnedw)
+            args.clip_max_norm)
         lr_scheduler.step()
 
         if epoch == args.epochs - 1:

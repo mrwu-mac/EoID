@@ -20,7 +20,7 @@ from PIL import Image
 
 from .backbone import build_backbone
 from .matcher import build_matcher, build_matcher_twostage
-from .cdn import build_cdn
+from .gen import build_gen
 
 from .clip import clip
 from datasets.static_hico import ACT_IDX_TO_ACT_NAME, HICO_INTERACTIONS, ACT_TO_ING, HOI_IDX_TO_ACT_IDX, \
@@ -37,23 +37,34 @@ except ImportError:
 
 class HOIModel(nn.Module):
     """
-    EoID Model.
+    Accelerated version of EoID model. Pre-extracted CLIP logits are required for this version.
     """
 
     def __init__(self, backbone, transformer, text_features, num_obj_classes, num_verb_classes, num_queries,
                  aux_loss=False, args=None):
         super().__init__()
+        self.args = args
         self.num_queries = num_queries
         self.transformer = transformer
         hidden_dim = transformer.d_model
-        self.query_embed = nn.Embedding(num_queries, hidden_dim)
-        self.obj_class_embed = nn.Linear(hidden_dim, num_obj_classes + 1)
-        self.verb_class_embed = nn.Linear(hidden_dim, num_verb_classes)
-        self.sub_bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
+        self.query_embed_h = nn.Embedding(num_queries, hidden_dim)
+        self.query_embed_o = nn.Embedding(num_queries, hidden_dim)
+        self.pos_guided_embedd = nn.Embedding(num_queries, hidden_dim)
+        self.hum_bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
         self.obj_bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
         self.backbone = backbone
         self.aux_loss = aux_loss
+        # self.dec_layers = self.args.dec_layers
+
+        # self.query_embed = nn.Embedding(num_queries, hidden_dim)
+        self.obj_class_embed = nn.Linear(hidden_dim, num_obj_classes + 1)
+        self.verb_class_embed = nn.Linear(hidden_dim, num_verb_classes)
+        # self.sub_bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
+        # self.obj_bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
+        # self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
+        # self.backbone = backbone
+        # self.aux_loss = aux_loss
         self.use_matching = args.use_matching
         self.dec_layers_hopd = args.dec_layers_hopd
         self.dec_layers_interaction = args.dec_layers_interaction
@@ -69,18 +80,25 @@ class HOIModel(nn.Module):
 
         src, mask = features[-1].decompose()
         assert mask is not None
-        hopd_out, interaction_decoder_out = self.transformer(self.input_proj(src), mask, self.query_embed.weight,
-                                                             pos[-1], self.vdetach)[:2]
+        # hopd_out, interaction_decoder_out = self.transformer(self.input_proj(src), mask, self.query_embed.weight,
+        #                                                      pos[-1], self.vdetach)[:2]
+        #
+        # outputs_sub_coord = self.sub_bbox_embed(hopd_out).sigmoid()
+        # outputs_obj_coord = self.obj_bbox_embed(hopd_out).sigmoid()
+        h_hs, o_hs, inter_hs = self.transformer(self.input_proj(src), mask,
+                                                self.query_embed_h.weight,
+                                                self.query_embed_o.weight,
+                                                self.pos_guided_embedd.weight,
+                                                pos[-1])[:3]
 
-        outputs_sub_coord = self.sub_bbox_embed(hopd_out).sigmoid()
-        outputs_obj_coord = self.obj_bbox_embed(hopd_out).sigmoid()
-        outputs_obj_class = self.obj_class_embed(hopd_out)
+        outputs_sub_coord = self.hum_bbox_embed(h_hs).sigmoid()
+        outputs_obj_coord = self.obj_bbox_embed(o_hs).sigmoid()
+        outputs_obj_class = self.obj_class_embed(o_hs)
         if self.use_matching:
-            outputs_matching = self.matching_embed(hopd_out)
+            outputs_matching = self.matching_embed(o_hs)
+        outputs_is = self.is_embed(inter_hs)
 
-        outputs_is = self.is_embed(interaction_decoder_out)
-
-        outputs_verb_class = self.verb_class_embed(interaction_decoder_out)
+        outputs_verb_class = self.verb_class_embed(inter_hs)
 
         out = {'pred_obj_logits': outputs_obj_class[-1], 'pred_verb_logits': outputs_verb_class[-1],
                'pred_sub_boxes': outputs_sub_coord[-1], 'pred_obj_boxes': outputs_obj_coord[-1]}
@@ -161,7 +179,10 @@ class SetCriterionHOI(nn.Module):
     def __init__(self, clip_model, preprocess, text_features, num_obj_classes, num_queries, num_verb_classes, matcher,
                  weight_dict, eos_coef, losses, args):
         super().__init__()
-
+        if args.dataset_file == 'hico_ua_st2':
+            self.clip_logits = torch.load('clip_logits/new_logits_' + args.clip_backbone + '.pth')
+        else:
+            self.clip_logits = torch.load('clip_logits/logits_' + args.clip_backbone + '.pth')
         self.clip = clip_model
         # self.topk_is = args.topk_is
         # self.gtclip = args.gtclip
@@ -235,6 +256,7 @@ class SetCriterionHOI(nn.Module):
         target_classes_o = torch.cat([t['obj_labels'][J] for t, (_, J) in zip(targets, indices)])
         target_classes = torch.full(src_logits.shape[:2], self.num_obj_classes,
                                     dtype=torch.int64, device=src_logits.device)
+
         target_classes[idx] = target_classes_o
 
         if not self.obj_reweight:
@@ -266,6 +288,7 @@ class SetCriterionHOI(nn.Module):
     def loss_obj_cardinality(self, outputs, targets, indices, num_interactions):
         pred_logits = outputs['pred_obj_logits']
         device = pred_logits.device
+        # tgt_lengths = torch.as_tensor([len(v['obj_labels']) for v in targets], device=device)
         tgt_lengths = torch.as_tensor([len(v[1]) for v in indices], device=device)
         card_pred = (pred_logits.argmax(-1) != pred_logits.shape[-1] - 1).sum(1)
         card_err = F.l1_loss(card_pred.float(), tgt_lengths.float())
@@ -277,6 +300,7 @@ class SetCriterionHOI(nn.Module):
         src_logits = outputs['pred_verb_logits']  # (2, 64, 117)
 
         regions = []
+        logits = []
         objs = []
         ps_idxss = []
         # if self.gtclip:
@@ -288,31 +312,24 @@ class SetCriterionHOI(nn.Module):
                     ps_idxs.append(idx)
 
             img_or = t['img_or']
+            img_name = t['filename']
 
             ps_idxss.append(ps_idxs)
-            union_boxes = t['union_boxes']
+            union_boxes = t['union_boxes'].cpu().numpy()
             obj_labels = t['obj_labels']
 
             for ps_idx in ps_idxs:
                 ho_box = union_boxes[ps_idx]
                 obj = obj_labels[ps_idx]
-                x, y, x2, y2 = ho_box.cpu().numpy()
-                region = img_or.crop((x, y, x2, y2))
-                # pad
-                region = expand2square(region, (0, 0, 0))
-                region = self.preprocess(region).unsqueeze(0)
-                regions.append(region)
+                logit = self.clip_logits[img_name][tuple(ho_box)]
+
+                logits.append(logit)
                 objs.append(obj)
 
-        if regions != []:
-            # clip forward
-            regions = torch.cat(regions)
-            regions = torch.as_tensor(regions).to(src_logits.device)
-            image_features = self.clip.encode_image(regions)
-            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-            logit_scale = self.clip.logit_scale.exp()
-            logits = logit_scale * image_features @ self.text_features.t()
+        if logits != []:
+
             # refer object softmax
+            logits = torch.stack(logits).to(src_logits.device)
             hoi2obj = torch.as_tensor(HOI_IDX_TO_OBJ_IDX).unsqueeze(0).repeat(logits.shape[0], 1)
             objs1 = torch.as_tensor(objs).unsqueeze(1).repeat(1, logits.shape[1])
             hoimask = (hoi2obj == objs1).to(logits.device)  # (n, 600)
@@ -338,62 +355,6 @@ class SetCriterionHOI(nn.Module):
                     logit = logit * t['seen_mask']
                     t['verb_labels'][ps_idx] = torch.where(t['verb_labels'][ps_idx] == 1., t['verb_labels'][ps_idx],
                                                            logit)
-        # else:
-        #     for t, indice in zip(targets, indices):
-        #         if t['st'].sum() > 0:
-        #             ps_idxs = []
-        #             or_ps_idxs = (t['st'] == 1).nonzero(as_tuple=True)[0]
-        #             for idx in or_ps_idxs:
-        #                 if idx.to('cpu') in indice[1].to('cpu'):
-        #                     ps_idxs.append(idx)
-        #             img_or = t['img_or']
-        #
-        #             ps_idxss.append(ps_idxs)
-        #             union_boxes = t['union_boxes']
-        #             obj_labels  = t['obj_labels']
-        #             for ps_idx in ps_idxs:
-        #                 ho_box = union_boxes[ps_idx]
-        #                 obj = obj_labels[ps_idx]
-        #                 x, y, x2, y2 = ho_box.cpu().numpy()
-        #                 region = img_or.crop((x, y, x2, y2))
-        #                 region = self.preprocess(region).unsqueeze(0)
-        #                 regions.append(region)
-        #                 objs.append(obj)
-        #
-        #     if regions != []:
-        #         # clip forward
-        #         regions = torch.cat(regions)
-        #         regions = torch.as_tensor(regions).to(src_logits.device)
-        #         image_features = self.clip.encode_image(regions)
-        #         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-        #         logit_scale = self.clip.logit_scale.exp()
-        #         logits = logit_scale * image_features @ self.text_features.t()
-        #         # refer object softmax
-        #         hoi2obj = torch.as_tensor(HOI_IDX_TO_OBJ_IDX).unsqueeze(0).repeat(logits.shape[0], 1)
-        #         objs1 = torch.as_tensor(objs).unsqueeze(1).repeat(1, logits.shape[1])
-        #         hoimask = (hoi2obj == objs1).to(logits.device)   # (n, 600)
-        #         if self.nointer_mask is not None:
-        #             nointer = self.nointer_mask.unsqueeze(0).repeat(logits.shape[0], 1).to(logits.device)
-        #             hoimask[nointer==True] = False
-        #         logits = logits.masked_fill(hoimask == False, float('-inf'))
-        #         logits = logits.softmax(dim=-1)
-        #         # map hoi to action
-        #         objs2 = torch.as_tensor(objs).unsqueeze(-1).repeat(1, self.num_verb_classes)
-        #         actions = torch.arange(self.num_verb_classes).unsqueeze(0).repeat(logits.shape[0], 1)
-        #         ind = torch.as_tensor(MAP_AO_TO_HOI, device=logits.device)[actions, objs2]
-        #         zeros = torch.zeros((logits.shape[0], 1), device=logits.device)
-        #         logits = torch.cat([logits, zeros], dim=-1)
-        #         new_logits = torch.cat([torch.index_select(a, 0, i).unsqueeze(0) for a, i in zip(logits, ind)])
-        #
-        #         num_preds_per_image = [len(p) for p in ps_idxss]
-        #         logitss = new_logits.split(num_preds_per_image, dim=0)
-        #
-        #         for t, logits, ps_idxs in zip(targets, logitss, ps_idxss):
-        #             if t['st'].sum() > 0:
-        #                 for ps_idx, logit in zip(ps_idxs, logits):
-        #                     if self.neg_0:
-        #                         logit = logit * t['seen_mask']
-        #                     t['verb_labels'][ps_idx] = torch.where(t['verb_labels'][ps_idx] == 1., t['verb_labels'][ps_idx], logit)
 
         idx = self._get_src_permutation_idx(indices)
         target_classes_o = torch.cat([t['verb_labels'][J] for t, (_, J) in zip(targets, indices)])
@@ -459,7 +420,7 @@ class SetCriterionHOI(nn.Module):
             loss_obj_bbox = F.l1_loss(src_obj_boxes, target_obj_boxes, reduction='none')
             losses['loss_sub_bbox'] = loss_sub_bbox.sum() / num_interactions
             losses['loss_obj_bbox'] = (loss_obj_bbox * exist_obj_boxes.unsqueeze(1)).sum() / (
-                        exist_obj_boxes.sum() + 1e-4)
+                    exist_obj_boxes.sum() + 1e-4)
             loss_sub_giou = 1 - torch.diag(generalized_box_iou(box_cxcywh_to_xyxy(src_sub_boxes),
                                                                box_cxcywh_to_xyxy(target_sub_boxes)))
             loss_obj_giou = 1 - torch.diag(generalized_box_iou(box_cxcywh_to_xyxy(src_obj_boxes),
@@ -479,6 +440,7 @@ class SetCriterionHOI(nn.Module):
 
         target_classes = torch.full(src_logits.shape[:2], 0,
                                     dtype=torch.int64, device=src_logits.device)
+        # print(target_classes_o)
         target_classes[idx] = target_classes_o
 
         loss_matching = F.cross_entropy(src_logits.transpose(1, 2), target_classes)
@@ -547,6 +509,8 @@ class SetCriterionHOI(nn.Module):
         return losses
 
     def _neg_loss(self, pred, gt, weights=None, alpha=0.25):
+        # pos_inds = gt.eq(1).float()
+        # neg_inds = gt.lt(1).float()
         pred = pred.sigmoid()
         pos_inds = gt.gt(0).float()
         neg_inds = gt.eq(0).float()
@@ -597,6 +561,7 @@ class SetCriterionHOI(nn.Module):
             loss = loss - neg_loss
         else:
             loss = loss - (pos_loss + neg_loss) / num_pos
+            # soft_loss = soft_loss / num_pos
         return loss, soft_loss
 
     def _bce_loss(self, pred, gt, weights=None):
@@ -725,26 +690,29 @@ def build(args):
 
     backbone = build_backbone(args)
 
-    cdn = build_cdn(args)
+    gen = build_gen(args)
     # build_clip
     model_path = 'ckpt/' + args.clip_backbone + '.pt'
 
-    clip_model, preprocess = clip.load(model_path, device=device)
+    # clip_model, preprocess = clip.load(model_path, device=device)
 
-    print("Turning off gradients in both the image and the text encoder")
-    for name, param in clip_model.named_parameters():
-        param.requires_grad_(False)
+    # print("Turning off gradients in both the image and the text encoder")
+    # for name, param in clip_model.named_parameters():
+    #     # if "prompt_learner" not in name:
+    #     param.requires_grad_(False)
 
-    ao_pair = [(ACT_TO_ING[d['action']], d['object']) for d in HICO_INTERACTIONS]
-    text_inputs = torch.cat(
-        [clip.tokenize("a picture of person {} {}".format(a, o.replace('_', ' '))) for a, o in ao_pair]).to(device)
-    text_features = clip_model.encode_text(text_inputs)
-    text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-    text_features = text_features.to(device)
+    # ao_pair = [(ACT_TO_ING[d['action']], d['object']) for d in HICO_INTERACTIONS]
+    # text_inputs = torch.cat(
+    #     [clip.tokenize("a picture of person {} {}".format(a, o.replace('_', ' '))) for a, o in ao_pair]).to(device)
+    # text_features = clip_model.encode_text(text_inputs)
+    # text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+    # text_features = text_features.to(device)
+    clip_model, preprocess = None, None
+    text_features = None
 
     model = HOIModel(
         backbone,
-        cdn,
+        gen,
         text_features,
         num_obj_classes=args.num_obj_classes,
         num_verb_classes=args.num_verb_classes,
@@ -754,10 +722,12 @@ def build(args):
     )
 
     matcher = build_matcher_twostage(args)
+
     weight_dict = {}
     weight_dict['loss_obj_ce'] = args.obj_loss_coef
     weight_dict['loss_verb_clip'] = args.clip_loss_coef
     weight_dict['loss_verb_ce'] = args.verb_loss_coef
+
     weight_dict['loss_sub_bbox'] = args.bbox_loss_coef
     weight_dict['loss_obj_bbox'] = args.bbox_loss_coef
     weight_dict['loss_sub_giou'] = args.giou_loss_coef
