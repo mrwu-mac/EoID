@@ -103,11 +103,9 @@ def evaluate_hoi(dataset_file, model, postprocessors, data_loader, subject_categ
 
         outputs = model(samples)
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
-        filenames = [t['filename'] for t in targets]
-        if args.clip == 6:
-            results = postprocessors['hoi'](outputs, orig_target_sizes, filenames)
-        else:
-            results = postprocessors['hoi'](outputs, orig_target_sizes)
+        # filenames = [t['filename'] for t in targets]
+
+        results = postprocessors['hoi'](outputs, orig_target_sizes)
 
         preds.extend(list(itertools.chain.from_iterable(utils.all_gather(results))))
         gts.extend(list(itertools.chain.from_iterable(utils.all_gather(copy.deepcopy(targets)))))
