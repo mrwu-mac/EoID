@@ -727,20 +727,25 @@ def build(args):
 
     cdn = build_cdn(args)
     # build_clip
-    model_path = 'ckpt/' + args.clip_backbone + '.pt'
+    if args.eval:
+        text_features = None
+        clip_model = None
+        preprocess = None
+    else:
+        model_path = 'ckpt/' + args.clip_backbone + '.pt'
 
-    clip_model, preprocess = clip.load(model_path, device=device)
+        clip_model, preprocess = clip.load(model_path, device=device)
 
-    print("Turning off gradients in both the image and the text encoder")
-    for name, param in clip_model.named_parameters():
-        param.requires_grad_(False)
+        print("Turning off gradients in both the image and the text encoder")
+        for name, param in clip_model.named_parameters():
+            param.requires_grad_(False)
 
-    ao_pair = [(ACT_TO_ING[d['action']], d['object']) for d in HICO_INTERACTIONS]
-    text_inputs = torch.cat(
-        [clip.tokenize("a picture of person {} {}".format(a, o.replace('_', ' '))) for a, o in ao_pair]).to(device)
-    text_features = clip_model.encode_text(text_inputs)
-    text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-    text_features = text_features.to(device)
+        ao_pair = [(ACT_TO_ING[d['action']], d['object']) for d in HICO_INTERACTIONS]
+        text_inputs = torch.cat(
+            [clip.tokenize("a picture of person {} {}".format(a, o.replace('_', ' '))) for a, o in ao_pair]).to(device)
+        text_features = clip_model.encode_text(text_inputs)
+        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+        text_features = text_features.to(device)
 
     model = HOIModel(
         backbone,
