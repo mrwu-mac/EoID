@@ -101,8 +101,9 @@ bash test.sh
 | :--- | :---: | :---: | :---: | :---: | :---: |
 |EoID(R50)|default |28.91$\pm$0.33 |30.39$\pm$0.40 |23.01$\pm$1.98| model |
 |EoID(R50)|rare_first |29.52 |31.39 |22.04| model |
+|EoID(R50)*|rare_first |29.27 |31.72 |21.07| [model](https://drive.google.com/file/d/10lIQRZm4N92Ihsr30Vw5RlTBY-Uh893x/view?usp=sharing) |
 |EoID(R50)|non_rare_first |26.69 |26.66 |26.77| model|
-
+\* The original version of the model has been lost. This a reimplement version on 2 RTX3090 with smaller batch size and learning rate.
 ## Acknowledge
 This repo is based on [CDN](https://github.com/YueLiao/CDN), [CLIP](https://github.com/openai/CLIP) and [ConsNet](https://github.com/yeliudev/ConsNet).
 
