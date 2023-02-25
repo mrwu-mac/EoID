@@ -99,10 +99,11 @@ bash test.sh
 ### HICO-DET under UC setting
 | |UC_Type |Full | Seen |Unseen |Download|
 | :--- | :---: | :---: | :---: | :---: | :---: |
-|EoID(R50)|default |28.91$\pm$0.33 |30.39$\pm$0.40 |23.01$\pm$1.98| model |
+|EoID(R50)|default |28.91 $\pm$ 0.33 |30.39 $\pm$ 0.40 |23.01 $\pm$ 1.98| model |
 |EoID(R50)|rare_first |29.52 |31.39 |22.04| model |
 |EoID(R50)*|rare_first |29.27 |31.72 |21.07| [model](https://drive.google.com/file/d/10lIQRZm4N92Ihsr30Vw5RlTBY-Uh893x/view?usp=sharing) |
 |EoID(R50)|non_rare_first |26.69 |26.66 |26.77| model |
+|EoID(R50)*|non_rare_first |25.64 |25.35 |26.80| [model](https://drive.google.com/file/d/1h4D4yYhItlrLwHz-LqvzLHkJ_7-bp2bL/view?usp=sharing) |
 
 \* The original version of the model has been lost. This is a reimplement version on 2 RTX3090 with smaller batch size and learning rate.
 ## Acknowledge
