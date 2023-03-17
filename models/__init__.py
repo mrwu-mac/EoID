@@ -12,7 +12,7 @@ def build_model(args):
         return build_eoid_acc(args)
     elif args.model == 'eoid_gen_acc':
         return build_eoid_gen_acc(args)
-    elif args.mode == 'cdn':
+    elif args.model == 'cdn':
         return build(args)
     elif args.model == 'cons':
         return build_cons(args)
