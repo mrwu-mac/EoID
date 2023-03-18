@@ -1,5 +1,5 @@
 # EoID: A Pytorch Implementation
-Code for our paper [End-to-End Zero-Shot HOI Detection via Vision and Language Knowledge Distillation](https://arxiv.org/abs/2204.03541) (AAAI2023).
+The official code for our paper [End-to-End Zero-Shot HOI Detection via Vision and Language Knowledge Distillation](https://arxiv.org/abs/2204.03541) (AAAI2023).
 
 ## Installation
 Install the dependencies. The code is tested with Pytorch 1.9.0. 
